@@ -64,9 +64,8 @@
         const db = firebase.firestore();
         
         let cart = [];
-        let totalBill = 0; // The calculator memory
+        let totalBill = 0; 
         
-        // The Price List
         const prices = {
             "Mango Shake": 60,
             "Cold Coffee": 50,
@@ -80,7 +79,7 @@
             const price = prices[item];
             
             cart.push({ item, note, price });
-            totalBill += price; // Update total
+            totalBill += price; 
             
             document.getElementById('cart-container').classList.remove('hidden');
             document.getElementById('total-display').innerText = "₹" + totalBill;
@@ -98,12 +97,44 @@
             document.getElementById('note-input').value = "";
         }
 
-                        async function sendFinalOrder() {
+        // THE NEW COLLISION-PROOF TRANSACTION LOGIC
+        async function sendFinalOrder() {
             if (cart.length === 0) return;
 
-            // 1. Create a reference to a "Master Counter" in the cloud
             const counterRef = db.collection("system").doc("tokenCounter");
 
+            try {
+                const sequentialToken = await db.runTransaction(async (transaction) => {
+                    const counterDoc = await transaction.get(counterRef);
+
+                    let nextNumber = 1; 
+                    if (counterDoc.exists) {
+                        nextNumber = counterDoc.data().lastToken + 1;
+                    }
+
+                    transaction.set(counterRef, { lastToken: nextNumber });
+                    return nextNumber;
+                });
+
+                await db.collection("orders").add({
+                    token: sequentialToken,
+                    items: cart,
+                    total: totalBill,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                document.getElementById('order-screen').classList.add('hidden');
+                document.getElementById('token-screen').classList.remove('hidden');
+                document.getElementById('token-display').innerText = "#" + sequentialToken;
+
+            } catch (error) {
+                console.error("Transaction failed: ", error);
+                alert("Please try placing your order again.");
+            }
+        }
+    </script>
+</body>
+</html>
             try {
                 // 2. Run a "Transaction" to safely get the next number in sequence
                 const sequentialToken = await db.runTransaction(async (transaction) => {
@@ -163,5 +194,6 @@
     </script>
 </body>
 </html>
+
 
 
