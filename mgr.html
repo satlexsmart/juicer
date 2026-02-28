@@ -27,57 +27,105 @@
     <audio id="ding" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
     <script>
-        const PUSHER_KEY = 'e0651c53560aef3e6009';
-        const PUSHER_SECRET = '9e6495e65cd91760b544';
+        // 1. YOUR SECRETS (Keep these as they are)
+const PUSHER_KEY = 'e0651c53560aef3e6009';
+const PUSHER_SECRET = '9e6495e65cd91760b544';
 
-        const pusher = new Pusher(PUSHER_KEY, { 
-            cluster: 'ap2',
-            channelAuthorization: {
-                customHandler: (params, callback) => {
-                    const stringToSign = params.socketId + ':' + params.channelName;
-                    const hash = CryptoJS.HmacSHA256(stringToSign, PUSHER_SECRET);
-                    const auth = PUSHER_KEY + ':' + hash.toString(CryptoJS.enc.Hex);
-                    callback(null, { auth: auth });
-                }
-            }
-        });
+// 2. CONNECT TO PUSHER
+const pusher = new Pusher(PUSHER_KEY, { 
+    cluster: 'ap2',
+    channelAuthorization: {
+        customHandler: (params, callback) => {
+            const stringToSign = params.socketId + ':' + params.channelName;
+            const hash = CryptoJS.HmacSHA256(stringToSign, PUSHER_SECRET);
+            const auth = PUSHER_KEY + ':' + hash.toString(CryptoJS.enc.Hex);
+            callback(null, { auth: auth });
+        }
+    }
+});
 
-        pusher.connection.bind('connected', () => {
-            document.getElementById('status-text').innerText = "System Online";
-        });
+pusher.connection.bind('connected', () => {
+    document.getElementById('status-text').innerText = "System Online";
+});
 
-        const channel = pusher.subscribe('private-orders');
+const channel = pusher.subscribe('private-orders');
 
-        channel.bind('client-new-order', function(data) {
-            document.getElementById('no-orders').classList.add('hidden');
-            
-            const audio = document.getElementById('ding');
-            audio.play().catch(e => console.log("Audio play prevented by browser. Click anywhere on page first."));
+// ---------------------------------------------------------
+// NEW MEMORY LOGIC STARTS HERE
+// ---------------------------------------------------------
 
-            const list = document.getElementById('order-list');
-            const card = document.createElement('div');
-            card.className = "bg-gray-800 p-6 rounded-3xl border-t-8 border-orange-500 shadow-2xl";
-            
-            let itemsHTML = data.items.map(i => `
-                <li class="flex flex-col border-b border-gray-700 pb-2">
-                    <span class="text-xl font-bold text-white">🥤 ${i.item}</span>
-                    <span class="text-sm text-orange-300 font-medium italic">${i.note}</span>
-                </li>
-            `).join('');
+// 3. Load existing orders from memory (or start empty)
+let activeOrders = JSON.parse(localStorage.getItem('juiceOrders')) || [];
 
-            card.innerHTML = `
-                <div class="flex justify-between items-start mb-4">
-                    <span class="text-3xl font-black text-orange-500">#${data.token}</span>
-                    <span class="text-xs text-gray-500 font-mono">${new Date().toLocaleTimeString()}</span>
-                </div>
-                <ul class="space-y-4 mb-8">${itemsHTML}</ul>
-                <button onclick="this.parentElement.remove()" class="w-full bg-green-600 hover:bg-green-500 py-4 rounded-2xl font-black uppercase tracking-widest transition">
-                    Served ✅
-                </button>
-            `;
-            
-            list.prepend(card);
-        });
+// 4. Function to draw all orders on the screen
+function renderOrders() {
+    const list = document.getElementById('order-list');
+    list.innerHTML = ''; // Clear the board
+
+    // Hide or show the "Waiting for orders..." text
+    if (activeOrders.length === 0) {
+        document.getElementById('no-orders').classList.remove('hidden');
+    } else {
+        document.getElementById('no-orders').classList.add('hidden');
+    }
+
+    // Loop through memory and draw each card
+    activeOrders.forEach(order => {
+        const card = document.createElement('div');
+        card.className = "bg-gray-800 p-6 rounded-3xl border-t-8 border-orange-500 shadow-2xl mb-4 transform transition-all";
+        
+        let itemsHTML = order.items.map(i => `
+            <li class="flex flex-col border-b border-gray-700 pb-2">
+                <span class="text-xl font-bold text-white">🥤 ${i.item}</span>
+                <span class="text-sm text-orange-300 font-medium italic">${i.note}</span>
+            </li>
+        `).join('');
+
+        card.innerHTML = `
+            <div class="flex justify-between items-start mb-4">
+                <span class="text-3xl font-black text-orange-500">#${order.token}</span>
+                <span class="text-xs text-gray-500 font-mono">${order.time}</span>
+            </div>
+            <ul class="space-y-4 mb-8">${itemsHTML}</ul>
+            <button onclick="markAsServed('${order.token}')" class="w-full bg-green-600 hover:bg-green-500 py-4 rounded-2xl font-black uppercase tracking-widest transition">
+                Served ✅
+            </button>
+        `;
+        // Put newest orders at the top
+        list.prepend(card); 
+    });
+}
+
+// 5. Function to delete an order when "Served" is clicked
+window.markAsServed = function(tokenToRemove) {
+    // Filter out the token we just served
+    activeOrders = activeOrders.filter(order => order.token !== tokenToRemove);
+    // Save the updated list back to memory
+    localStorage.setItem('juiceOrders', JSON.stringify(activeOrders));
+    // Redraw the screen
+    renderOrders();
+};
+
+// 6. When a new order arrives from the customer's phone
+channel.bind('client-new-order', function(data) {
+    // Play the sound
+    const audio = document.getElementById('ding');
+    audio.play().catch(e => console.log("Audio play prevented"));
+
+    // Add a timestamp to the data
+    data.time = new Date().toLocaleTimeString();
+    
+    // Push to our array and save to local memory
+    activeOrders.push(data);
+    localStorage.setItem('juiceOrders', JSON.stringify(activeOrders));
+    
+    // Redraw the screen to show the new order
+    renderOrders();
+});
+
+// 7. Draw whatever is in memory the moment the page loads
+renderOrders();
     </script>
 </body>
+
 </html>
