@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juice Center | Order</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body class="bg-orange-50 p-4 font-sans">
+    <div id="order-screen" class="max-w-md mx-auto mt-4">
+        <h1 class="text-3xl font-black text-orange-600 mb-6 text-center">JUICE UP</h1>
+        
+        <div class="bg-white p-6 rounded-3xl shadow-xl mb-6">
+            <label class="block text-xs font-bold text-gray-400 mb-2 uppercase">Select Drink</label>
+            <select id="item-select" class="w-full p-4 bg-gray-50 rounded-2xl mb-4 text-lg font-bold border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-orange-500">
+                <option>Mango Shake</option>
+                <option>Cold Coffee</option>
+                <option>Mix Fruit Juice</option>
+                <option>Mosambi Special</option>
+            </select>
+            
+            <input id="note-input" type="text" placeholder="Special notes (e.g. no ice)" class="w-full p-4 bg-gray-50 rounded-2xl mb-4 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-orange-500">
+            
+            <button onclick="addToCart()" class="w-full py-4 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition shadow-md active:scale-95">
+                + Add to Tray
+            </button>
+        </div>
+
+        <div id="cart-container" class="hidden bg-white p-6 rounded-3xl shadow-xl border-t-8 border-orange-500">
+            <h2 class="font-bold text-gray-800 mb-4 uppercase text-sm text-center">Your Tray</h2>
+            <ul id="cart-list" class="space-y-3 mb-6"></ul>
+            
+            <button onclick="sendFinalOrder()" class="w-full py-5 bg-green-600 text-white rounded-2xl font-black text-xl shadow-lg active:scale-95 transition">
+                PLACE ORDER
+            </button>
+        </div>
+    </div>
+
+    <div id="token-screen" class="hidden max-w-md mx-auto bg-white rounded-3xl shadow-2xl p-10 mt-10 text-center border-b-8 border-orange-500">
+        <p class="text-gray-400 font-bold uppercase tracking-widest text-xs">Booking Confirmed</p>
+        <div id="token-display" class="text-7xl font-black text-orange-600 my-4">#--</div>
+        <p class="text-gray-500 text-sm">Please show this screen at the counter.</p>
+        <button onclick="location.reload()" class="mt-8 text-orange-500 font-bold text-sm underline">Order more</button>
+    </div>
+
+    <script>
+        const PUSHER_KEY = 'e0651c53560aef3e6009';
+        const PUSHER_SECRET = '9e6495e65cd91760b544';
+
+        const pusher = new Pusher(PUSHER_KEY, { 
+            cluster: 'ap2',
+            channelAuthorization: {
+                customHandler: (params, callback) => {
+                    const stringToSign = params.socketId + ':' + params.channelName;
+                    const hash = CryptoJS.HmacSHA256(stringToSign, PUSHER_SECRET);
+                    const auth = PUSHER_KEY + ':' + hash.toString(CryptoJS.enc.Hex);
+                    callback(null, { auth: auth });
+                }
+            }
+        });
+
+        const channel = pusher.subscribe('private-orders'); 
+        let cart = [];
+
+        function addToCart() {
+            const item = document.getElementById('item-select').value;
+            const note = document.getElementById('note-input').value || "Standard";
+            
+            cart.push({ item, note });
+            
+            document.getElementById('cart-container').classList.remove('hidden');
+            const li = document.createElement('li');
+            li.className = "flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100";
+            li.innerHTML = `<span class="font-bold text-gray-700">${item}</span><span class="text-xs text-gray-400 italic">${note}</span>`;
+            document.getElementById('cart-list').appendChild(li);
+            document.getElementById('note-input').value = "";
+        }
+
+        function sendFinalOrder() {
+            if (cart.length === 0) return;
+            const now = new Date();
+            const token = now.getHours().toString() + now.getMinutes().toString() + Math.floor(Math.random() * 90 + 10);
+
+            channel.trigger('client-new-order', { token: token, items: cart });
+
+            document.getElementById('order-screen').classList.add('hidden');
+            document.getElementById('token-screen').classList.remove('hidden');
+            document.getElementById('token-display').innerText = "#" + token;
+        }
+    </script>
+</body>
+</html>
