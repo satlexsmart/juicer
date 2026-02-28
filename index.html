@@ -98,17 +98,45 @@
             document.getElementById('note-input').value = "";
         }
 
-        async function sendFinalOrder() {
+                async function sendFinalOrder() {
             if (cart.length === 0) return;
-            const token = Math.floor(Math.random() * 900 + 100).toString();
 
-            // SEND ORDER + TOTAL TO CLOUD
-            await db.collection("orders").add({
-                token: token,
-                items: cart,
-                total: totalBill, // Added to the database!
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            // 1. Create a reference to a "Master Counter" in the cloud
+            const counterRef = db.collection("system").doc("tokenCounter");
+
+            try {
+                // 2. Run a "Transaction" to safely get the next number in sequence
+                const sequentialToken = await db.runTransaction(async (transaction) => {
+                    const counterDoc = await transaction.get(counterRef);
+
+                    let nextNumber = 1; // Start at 1 if this is the first order ever
+                    if (counterDoc.exists) {
+                        nextNumber = counterDoc.data().lastToken + 1;
+                    }
+
+                    // Update the master counter for the next person
+                    transaction.set(counterRef, { lastToken: nextNumber });
+
+                    return nextNumber;
+                });
+
+                // 3. Save the order using the new sequential token!
+                await db.collection("orders").add({
+                    token: sequentialToken, // No more random math!
+                    items: cart,
+                    total: totalBill,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                document.getElementById('order-screen').classList.add('hidden');
+                document.getElementById('token-screen').classList.remove('hidden');
+                document.getElementById('token-display').innerText = "#" + sequentialToken;
+
+            } catch (error) {
+                console.error("Transaction failed: ", error);
+                alert("Please try placing your order again.");
+            }
+        });
 
             document.getElementById('order-screen').classList.add('hidden');
             document.getElementById('token-screen').classList.remove('hidden');
@@ -117,3 +145,4 @@
     </script>
 </body>
 </html>
+
