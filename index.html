@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Juice Center | Order</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
@@ -30,7 +29,10 @@
         </div>
 
         <div id="cart-container" class="hidden bg-white p-6 rounded-3xl shadow-xl border-t-8 border-orange-500">
-            <h2 class="font-bold text-gray-800 mb-4 uppercase text-sm text-center">Your Tray</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-gray-800 uppercase text-sm">Your Tray</h2>
+                <span id="total-display" class="font-black text-orange-600 text-lg">₹0</span>
+            </div>
             <ul id="cart-list" class="space-y-3 mb-6"></ul>
             
             <button onclick="sendFinalOrder()" class="w-full py-5 bg-green-600 text-white rounded-2xl font-black text-xl shadow-lg active:scale-95 transition">
@@ -47,7 +49,7 @@
     </div>
 
     <script>
-        // YOUR EXACT FIREBASE KEYS
+        // ⚠️ PASTE YOUR EXACT FIREBASE KEYS HERE ⚠️
         const firebaseConfig = {
             apiKey: "AIzaSyCnwh0cRGZCbjPNTKXtE6xDuBQkx0p5e3g",
             authDomain: "juicer-cf8fc.firebaseapp.com",
@@ -58,21 +60,40 @@
             measurementId: "G-RJZG4Z674S"
         };
 
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        
         let cart = [];
+        let totalBill = 0; // The calculator memory
+        
+        // The Price List
+        const prices = {
+            "Mango Shake": 60,
+            "Cold Coffee": 50,
+            "Mix Fruit Juice": 40,
+            "Mosambi Special": 30
+        };
 
         function addToCart() {
             const item = document.getElementById('item-select').value;
             const note = document.getElementById('note-input').value || "Standard";
+            const price = prices[item];
             
-            cart.push({ item, note });
+            cart.push({ item, note, price });
+            totalBill += price; // Update total
             
             document.getElementById('cart-container').classList.remove('hidden');
+            document.getElementById('total-display').innerText = "₹" + totalBill;
+            
             const li = document.createElement('li');
             li.className = "flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100";
-            li.innerHTML = `<span class="font-bold text-gray-700">${item}</span><span class="text-xs text-gray-400 italic">${note}</span>`;
+            li.innerHTML = `
+                <div>
+                    <span class="font-bold text-gray-700 block">${item}</span>
+                    <span class="text-xs text-gray-400 italic">${note}</span>
+                </div>
+                <span class="text-orange-600 font-bold">₹${price}</span>
+            `;
             document.getElementById('cart-list').appendChild(li);
             document.getElementById('note-input').value = "";
         }
@@ -81,10 +102,11 @@
             if (cart.length === 0) return;
             const token = Math.floor(Math.random() * 900 + 100).toString();
 
-            // SEND ORDER TO GOOGLE CLOUD
+            // SEND ORDER + TOTAL TO CLOUD
             await db.collection("orders").add({
                 token: token,
                 items: cart,
+                total: totalBill, // Added to the database!
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
 
