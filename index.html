@@ -97,13 +97,43 @@
             document.getElementById('note-input').value = "";
         }
 
-        // THE NEW COLLISION-PROOF TRANSACTION LOGIC
         async function sendFinalOrder() {
             if (cart.length === 0) return;
 
             const counterRef = db.collection("system").doc("tokenCounter");
 
             try {
+                const sequentialToken = await db.runTransaction(async (transaction) => {
+                    const counterDoc = await transaction.get(counterRef);
+
+                    let nextNumber = 1; 
+                    if (counterDoc.exists) {
+                        nextNumber = counterDoc.data().lastToken + 1;
+                    }
+
+                    transaction.set(counterRef, { lastToken: nextNumber });
+                    return nextNumber;
+                });
+
+                await db.collection("orders").add({
+                    token: sequentialToken,
+                    items: cart,
+                    total: totalBill,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                document.getElementById('order-screen').classList.add('hidden');
+                document.getElementById('token-screen').classList.remove('hidden');
+                document.getElementById('token-display').innerText = "#" + sequentialToken;
+
+            } catch (error) {
+                console.error("Transaction failed: ", error);
+                alert("Please try placing your order again.");
+            }
+        }
+    </script>
+</body>
+</html>
                 const sequentialToken = await db.runTransaction(async (transaction) => {
                     const counterDoc = await transaction.get(counterRef);
 
@@ -194,6 +224,7 @@
     </script>
 </body>
 </html>
+
 
 
 
