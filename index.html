@@ -98,7 +98,7 @@
             document.getElementById('note-input').value = "";
         }
 
-                async function sendFinalOrder() {
+                        async function sendFinalOrder() {
             if (cart.length === 0) return;
 
             // 1. Create a reference to a "Master Counter" in the cloud
@@ -138,6 +138,24 @@
             }
         });
 
+                // 3. Save the order using the new sequential token!
+                await db.collection("orders").add({
+                    token: sequentialToken, // No more random math!
+                    items: cart,
+                    total: totalBill,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                document.getElementById('order-screen').classList.add('hidden');
+                document.getElementById('token-screen').classList.remove('hidden');
+                document.getElementById('token-display').innerText = "#" + sequentialToken;
+
+            } catch (error) {
+                console.error("Transaction failed: ", error);
+                alert("Please try placing your order again.");
+            }
+        });
+
             document.getElementById('order-screen').classList.add('hidden');
             document.getElementById('token-screen').classList.remove('hidden');
             document.getElementById('token-display').innerText = "#" + token;
@@ -145,4 +163,5 @@
     </script>
 </body>
 </html>
+
 
