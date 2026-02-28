@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Juice Center | Order</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body class="bg-orange-50 p-4 font-sans">
     <div id="order-screen" class="max-w-md mx-auto mt-4">
@@ -46,22 +47,20 @@
     </div>
 
     <script>
-        const PUSHER_KEY = 'e0651c53560aef3e6009';
-        const PUSHER_SECRET = '9e6495e65cd91760b544';
+        // YOUR EXACT FIREBASE KEYS
+        const firebaseConfig = {
+            apiKey: "AIzaSyCnwh0cRGZCbjPNTKXtE6xDuBQkx0p5e3g",
+            authDomain: "juicer-cf8fc.firebaseapp.com",
+            projectId: "juicer-cf8fc",
+            storageBucket: "juicer-cf8fc.firebasestorage.app",
+            messagingSenderId: "169880056817",
+            appId: "1:169880056817:web:28f95611dfc0d5b02c4a50",
+            measurementId: "G-RJZG4Z674S"
+        };
 
-        const pusher = new Pusher(PUSHER_KEY, { 
-            cluster: 'ap2',
-            channelAuthorization: {
-                customHandler: (params, callback) => {
-                    const stringToSign = params.socketId + ':' + params.channelName;
-                    const hash = CryptoJS.HmacSHA256(stringToSign, PUSHER_SECRET);
-                    const auth = PUSHER_KEY + ':' + hash.toString(CryptoJS.enc.Hex);
-                    callback(null, { auth: auth });
-                }
-            }
-        });
-
-        const channel = pusher.subscribe('private-orders'); 
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
         let cart = [];
 
         function addToCart() {
@@ -78,12 +77,16 @@
             document.getElementById('note-input').value = "";
         }
 
-        function sendFinalOrder() {
+        async function sendFinalOrder() {
             if (cart.length === 0) return;
-            const now = new Date();
-            const token = now.getHours().toString() + now.getMinutes().toString() + Math.floor(Math.random() * 90 + 10);
+            const token = Math.floor(Math.random() * 900 + 100).toString();
 
-            channel.trigger('client-new-order', { token: token, items: cart });
+            // SEND ORDER TO GOOGLE CLOUD
+            await db.collection("orders").add({
+                token: token,
+                items: cart,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
 
             document.getElementById('order-screen').classList.add('hidden');
             document.getElementById('token-screen').classList.remove('hidden');
